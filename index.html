@@ -67,70 +67,113 @@
 			{
 				flex: 1 1 auto;
 			}
+
+		.tunnelButton
+		{
+			cursor: pointer;
+			margin: 0px;
+			padding-top: 0.8em;
+			padding-bottom: 0.8em;
+		}
+
+			.tunnelButton:hover
+			{
+				background-color: rgba(0,0,0,0.1);
+			}
+
+		.peerButton
+		{
+			cursor: pointer;
+			margin: 0px;
+			padding-top: 0.4em;
+			padding-bottom: 0.4em;
+		}
+
+			.peerButton:hover
+			{
+				background-color: rgba(0,0,0,0.1);
+			}
 	</style>
 </head>
 <body>
 	<div id="app">
 		<h1>WireGuard Peer Config Helper</h1>
 
-		<button @click="addTunnel">Add Tunnel</button>
+		<p title="A peer with a private key or pre-shared key stored is a possible security risk, because it is stored in your browser's local storage.  For best security you should delete these keys after the peer has been exported.">Peers with secrets stored: {{ numPeersWithSecretsStored }}</p>
+
+		<p><button @click="addTunnel">Add Tunnel</button></p>
 
 		<div v-for="(tunnel, tIndex) in tunnels" :key="tunnel.id" class="tunnel">
-			<h2>Tunnel {{ tIndex + 1 }}</h2>
-			<label title="Wireguard server hostname or IP address"><span>Hostname: </span><input v-model="tunnel.hostname"></label>
-			<label title="Wireguard server port number (UDP)"><span>Port: </span><input v-model="tunnel.port" type="number"></label>
-			<label title="The tunnel network (peers within the wireguard tunnel will be assigned addresses in this network). Specify the IP address of the tunnel host followed by a forward slash followed by the subnet size.">
-				<span>Tunnel Address: </span><input v-model="tunnel.interfaceAddress" placeholder="e.g. 10.11.12.1/24">
-			</label>
-			<label title="The remote network that will be accessible through the tunnel.">
-				<span>Remote Network: </span><input v-model="tunnel.remoteNetwork" placeholder="e.g. 10.0.0.1/24">
-			</label>
-			<label><span>Public Key: </span><input v-model="tunnel.publicKey" placeholder="wireguard public key of the tunnel"></label>
-			<button @click="removeTunnel(tIndex)">Remove Tunnel</button>
-			<button @click="addPeer(tIndex)">Add Peer</button>
+			<h2 class="tunnelButton" @click="tunnel.collapse = !tunnel.collapse">{{ tunnel.name ? tunnel.name : ("Tunnel " + tIndex) }}</h2>
+			<template v-if="!tunnel.collapse">
+				<label title="Tunnel name (not parsed)"><span>Tunnel name (not parsed): </span><input v-model="tunnel.name"></label>
+				<label title="Wireguard server hostname or IP address"><span>Hostname: </span><input v-model="tunnel.hostname"></label>
+				<label title="Wireguard server port number (UDP)"><span>Port: </span><input v-model="tunnel.port" type="number"></label>
+				<label title="The tunnel network (peers within the wireguard tunnel will be assigned addresses in this network). Specify the IP address of the tunnel host followed by a forward slash followed by the subnet size.">
+					<span>Tunnel Address: </span><input v-model="tunnel.interfaceAddress" placeholder="e.g. 10.11.12.1/24">
+				</label>
+				<label title="The remote network that will be accessible through the tunnel.">
+					<span>Remote Network: </span><input v-model="tunnel.remoteNetwork" placeholder="e.g. 10.0.0.1/24">
+				</label>
+				<label><span>Public Key: </span><input v-model="tunnel.publicKey" placeholder="wireguard public key of the tunnel"></label>
 
-			<div v-for="(peer, pIndex) in tunnel.peers" :key="peer.id" class="peer">
-				<h3>Peer {{ pIndex + 1 }}</h3>
-				<label title="Text describing the peer (this does not export into the wireguard config file).">
-					<span style="font-style: italic;">Name: </span>
-					<input v-model="peer.name">
-				</label>
-				<label title="Public key of the peer (this does not export into the wireguard config file).">
-					<span style="font-style: italic;">Public Key: </span>
-					<input v-model="peer.publicKey" readonly>
-				</label>
-				<label title="The private key of the peer">
-					<span>Private Key: </span>
-					<input type="password" v-model="peer.privateKey" placeholder="wireguard private key (keep this secure!)" autocomplete="off">
-					<button @click="copyPreviousInput" title="copy key">&#128203;</button>
-					<button @click="togglePreviousInput" title="toggle visibility">&#128273;</button>
-					<button @click="generatePrivateKey(peer)" title="generate new key">&#10227;</button>
-				</label>
-				<label title="Pre-shared key known on both ends of the wireguard connection.">
-					<span>Pre-shared Key: </span>
-					<input type="password" v-model="peer.psk" placeholder="wireguard pre-shared key (keep this secure!)" autocomplete="off">
-					<button @click="copyPreviousInput" title="copy key">&#128203;</button>
-					<button @click="togglePreviousInput" title="toggle visibility">&#128273;</button>
-					<button @click="generatePresharedKey(peer)" title="generate new key">&#10227;</button>
-				</label>
-				<label title="IP address of this peer inside the tunnel network.">
-					<span>Peer IP Address: </span>
-					<input v-model="peer.ip">
-				</label>
-				<button @click="removePeer(tIndex, pIndex)">Remove Peer</button>
-				<button @click="showExport(tunnel, peer)">Toggle Export</button>
-				<div v-if="showPeerConfigs[peer.id] && peerConfigs[peer.id]">
-					<textarea readonly @focus="onTextareaFocus" @click="onTextareaFocus">{{ peerConfigs[peer.id].config }}</textarea>
-					<br />
-					<button @click="copyPreviousInput">&#128203; Copy Config</button>
-					<br />
-					<img :src="peerConfigs[peer.id].qr">
+				<button @click="removeTunnel(tIndex)">Delete Tunnel</button>
+				<br />
+				<button @click="addPeer(tIndex)">Add Peer Below</button>
+
+				<div v-for="(peer, pIndex) in tunnel.peers" :key="peer.id" class="peer">
+					<h3 class="peerButton" @click="peer.collapse = !peer.collapse">{{ hasSecretsStored(peer) ? "*" : "" }}Peer {{ pIndex + 1 }} {{ peer.name ? ("(" + peer.name + ")") : "" }}</h3>
+					<template v-if="!peer.collapse">
+						<label title="Text describing the peer (this does not export into the wireguard config file).">
+							<span style="font-style: italic;">Name: </span>
+							<input v-model="peer.name">
+						</label>
+						<label title="Public key of the peer (this does not export into the wireguard config file).">
+							<span style="font-style: italic;">Public Key: </span>
+							<input v-model="peer.publicKey" readonly>
+							<button @click="copyPreviousInput" title="copy key">&#128203;</button>
+						</label>
+						<label title="The private key of the peer">
+							<span>Private Key: </span>
+							<input type="password" v-model="peer.privateKey" placeholder="wireguard private key (keep this secure!)" autocomplete="off">
+							<button @click="generatePrivateKey(peer)" title="generate new key">&#10227;</button>
+							<button @click="togglePreviousInput" title="toggle visibility">&#128273;&#128065;</button>
+							<button @click="copyPreviousInput" title="copy key">&#128203;</button>
+						</label>
+						<label title="Pre-shared key known on both ends of the wireguard connection.">
+							<span>Pre-shared Key: </span>
+							<input type="password" v-model="peer.psk" placeholder="wireguard pre-shared key (keep this secure!)" autocomplete="off">
+							<button @click="generatePresharedKey(peer)" title="generate new key">&#10227;</button>
+							<button @click="togglePreviousInput" title="toggle visibility">&#128273;&#128065;</button>
+							<button @click="copyPreviousInput" title="copy key">&#128203;</button>
+						</label>
+						<label title="IP address of this peer inside the tunnel network.">
+							<span>Peer IP Address: </span>
+							<input v-model="peer.ip">
+						</label>
+
+						<!--<br />
+		<button @click="showExport(tunnel, peer)">Toggle Export</button>
+
+		<div v-if="showPeerConfigs[peer.id] && peerConfigs[peer.id]">-->
+						<div v-if="peerConfigs[peer.id]">
+							<h4>Peer Configuration:</h4>
+							<textarea readonly @focus="onTextareaFocus" @click="onTextareaFocus">{{ peerConfigs[peer.id].config }}</textarea>
+							<br />
+							<button @click="copyPreviousInput">&#128203; Copy Config</button>
+							<br />
+							<img :src="peerConfigs[peer.id].qr">
+						</div>
+					</template>
+					<button @click="removePeer(tIndex, pIndex)">Delete Peer</button>
 				</div>
-			</div>
+				<button v-if="tunnel.peers && tunnel.peers.length" @click="addPeer(tIndex)">Add Peer Above</button>
+			</template>
 		</div>
+		<p><button @click="addTunnel">Add Tunnel</button></p>
 		<h2>About</h2>
 		<p>This mini-web app helps you generate peer configuration files for WireGuard tunnels.  It is intended for use with WireGuard networks that don't offer you another more convenient way to generate peer configs.</p>
-		<p>For the most secure operation, delete peers from this app after you've exported their configuration, so their private keys will be deleted.</p>
+		<p>For the most secure operation, delete secret (private / shared) keys from this app after you've exported their configuration.</p>
 		<p>Limitations:</p>
 		<ul>
 			<li>This app cannot help with IPv6 tunnel network addressing, or with IPv4 subnets larger than /24.</li>
@@ -151,8 +194,28 @@
 					peerConfigs: {},
 				};
 			},
+			computed:
+			{
+				numPeersWithSecretsStored()
+				{
+					let count = 0;
+					for (const tunnel of this.tunnels)
+					{
+						for (const peer of tunnel.peers)
+						{
+							if (peer.privateKey || peer.psk)
+								count++;
+						}
+					}
+					return count;
+				},
+			},
 			methods:
 			{
+				hasSecretsStored(peer)
+				{
+					return !!(peer.privateKey || peer.psk);
+				},
 				save()
 				{
 					navigator.storage.persist(); // Request persistent storage
@@ -167,7 +230,8 @@
 						interfaceAddress: '',
 						remoteNetwork: '',
 						publicKey: '',
-						peers: []
+						peers: [],
+						collapse: false,
 					});
 					this.save();
 				},
@@ -265,10 +329,20 @@
 				},
 				generatePrivateKey(peer)
 				{
+					if (peer.privateKey)
+					{
+						if (!confirm("This will overwrite the existing private key for this peer.  Are you sure?"))
+							return;
+					}
 					peer.privateKey = generatePrivateKey();
 				},
 				generatePresharedKey(peer)
 				{
+					if (peer.psk)
+					{
+						if (!confirm("This will overwrite the existing pre-shared key for this peer.  Are you sure?"))
+							return;
+					}
 					peer.psk = generatePresharedKey();
 				},
 				togglePreviousInput(event)
